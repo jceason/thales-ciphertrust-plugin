@@ -1,9 +1,10 @@
 package com.ciphertrust
 
-import com.morpheusdata.core.CypherModuleProvider
+import com.morpheusdata.core.providers.CypherModuleProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.cypher.CypherModule
+import com.morpheusdata.model.OptionType
 
 class ThalesCipherTrustCypherProvider implements CypherModuleProvider{
     MorpheusContext morpheusContext
@@ -26,6 +27,8 @@ class ThalesCipherTrustCypherProvider implements CypherModuleProvider{
         module.setPlugin(this.plugin)
         return module
     }
+
+
 
     /**
      * The mount prefix point for which this module should be registered to cypher's backend.

@@ -40,6 +40,7 @@ class ThalesCipherTrustPlugin extends Plugin {
                 this.setDescription("Thales CipherTrust Plugin")
                 this.setAuthor("Thales")
 
+
                 ThalesCipherTrustCredentialProvider cipherTrustCredentialProvider = new ThalesCipherTrustCredentialProvider(this, morpheus)
 	            this.pluginProviders.put("ciphertrust" ,cipherTrustCredentialProvider)
 
@@ -76,38 +77,39 @@ class ThalesCipherTrustPlugin extends Plugin {
                 fieldName: 'cipherTrustPluginServiceUrl',
                 displayOrder: 0,
                 fieldLabel: 'Thales CipherTrust Url',
-                helpText: 'The full URL of the Thales CipherTrust Manager endpoint. Example: https://ciphertrust.domain/akeyless-api/',
+                helpText: 'The full URL of the Thales CipherTrust Manager endpoint. Example: https://ciphertrust.domain/api/',
                 required: true,
                 inputType: OptionType.InputType.TEXT
         )
         this.settings << new OptionType (
-                name: 'Thales CipherTrust API Access Id',
+                name: 'Thales CipherTrust Username',
                 code: 'ciphertrust-cypher-plugin-serviceusername',
                 fieldName: 'cipherTrustPluginServiceUsername',
                 displayOrder: 1,
-                fieldLabel: 'Thales CipherTrust Access Id',
-                helpText: 'The Thales CipherTrust API Access Id',
+                fieldLabel: 'Thales CipherTrust API Username',
+                helpText: 'The Thales CipherTrust API Username',
                 required: true,
                 inputType: OptionType.InputType.TEXT
         )
         this.settings << new OptionType (
-                name: 'Thales CipherTrust API Access Key',
+                name: 'Thales CipherTrust Password',
                 code: 'ciphertrust-cypher-plugin-servicepassword',
                 fieldName: 'cipherTrustPluginServicePassword',
                 displayOrder: 2,
-                fieldLabel: 'Thales CipherTrust API Access Key',
-                helpText: 'The Thales CipherTrust API Access Key',
+                fieldLabel: 'Thales CipherTrust API Password',
+                helpText: 'The Thales CipherTrust API Password',
                 required: true,
                 inputType: OptionType.InputType.PASSWORD
         )
         this.settings << new OptionType (
-                name: 'Thales CipherTrust API Secret Path',
-                code: 'ciphertrust-cypher-plugin-secretPath',
-                fieldName: 'cipherTrustPluginSecretPath',
+                name: 'Thales CipherTrust Domain',
+                code: 'ciphertrust-cypher-plugin-serviceSlave',
+                fieldName: 'cipherTrustPluginServiceSlave',
                 displayOrder: 3,
-                fieldLabel: 'Thales CipherTrust API Secret Path',
-                helpText: 'The Thales CipherTrust API Secret Path',
+                fieldLabel: 'Thales CipherTrust Domain',
+                helpText: 'The Thales CipherTrust Domain',
                 required: false,
+				defaultValue: 'root',
                 inputType: OptionType.InputType.TEXT
         )
 

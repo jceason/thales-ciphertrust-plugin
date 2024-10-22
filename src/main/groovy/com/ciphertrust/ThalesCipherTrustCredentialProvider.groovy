@@ -77,16 +77,23 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
                 def apiResults = apiClient.callApi(apiUrl,'v2/get-secret-value',null,null,restOptions,'POST')
 
                 if(apiResults.success) {
-                    //response = ServiceResponse.success(apiResults.content as Map)
 
-                    log.info("loadCredentialData apiResults content ${apiResults.content}")
-
+                    //log.info("loadCredentialData apiResults content ${apiResults.content}")
                     Map content = new JsonSlurper().parseText(apiResults.content) as Map
-                    log.info("loadCredentialData content map ${content}")
-                    def data =  content.values()
-                    log.info("loadCredentialData data map  ${data}")
+                    //log.info("loadCredentialData content map ${content}")
+                    String tmp = content.values() ;
+                    tmp = tmp.replaceAll(/^\[\{/, "{ ");
+                    tmp = tmp.replaceAll(/\}\]$/, " }");
+                    //log.info("loadCredentialData tmp ${tmp}")
 
-                    ServiceResponse<Map> response = new ServiceResponse<>(true,null,null,data)
+                    def data = new JsonSlurper().parseText(tmp);
+
+                    log.info("loadCredentialData data map ${data}");
+                    log.info("loadCredentialData data keys ${data.keySet()}");
+                    //log.info("loadCredentialData data values ${data.values()}");
+                    //def data = [username:"jeff",password:"123"]
+
+                    ServiceResponse<Map> response = new ServiceResponse<>(true,null,null,data as Map)
                     return response
                 } else {
                     return ServiceResponse.error(apiResults.error)
