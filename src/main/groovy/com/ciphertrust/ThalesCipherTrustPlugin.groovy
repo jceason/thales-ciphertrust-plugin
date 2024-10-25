@@ -36,39 +36,15 @@ class ThalesCipherTrustPlugin extends Plugin {
 	@Override
 	void initialize() {
 
-                this.setName("Thales CipherTrust")
-                this.setDescription("Thales CipherTrust Plugin")
-                this.setAuthor("Thales")
+		this.setName("Thales CipherTrust")
+		this.setDescription("Thales CipherTrust Plugin")
+		this.setAuthor("Thales")
 
+		ThalesCipherTrustCredentialProvider cipherTrustCredentialProvider = new ThalesCipherTrustCredentialProvider(this, morpheus)
+		this.pluginProviders.put("ciphertrust" ,cipherTrustCredentialProvider)
 
-                ThalesCipherTrustCredentialProvider cipherTrustCredentialProvider = new ThalesCipherTrustCredentialProvider(this, morpheus)
-	            this.pluginProviders.put("ciphertrust" ,cipherTrustCredentialProvider)
-
-                ThalesCipherTrustCypherProvider     cipherTrustCypherProvider = new ThalesCipherTrustCypherProvider(this, morpheus)
-                this.pluginProviders.put("ciphertrust-cypher", cipherTrustCypherProvider)
-
-                //works below
-                //this.registerProvider(new ThalesCipherTrustCredentialProvider(this,this.morpheus))
-                //this.registerProvider(new ThalesCipherTrustCypherProvider(this,this.morpheus))
-
-				/* 
-                ThalesCipherTrustCredentialProvider thalesCipherTrustCredentialProvider new ThalesCipherTrustCredentialProvider(this, morpheus)
-	            this.pluginProviders.put('ciphertrust' thalesCipherTrustCredentialProvider)
-                ThalesCipherTrustCypherProvider thalesCipherTrustCypherProvider new ThalesCipherTrustCypherProvider(this, morpheus)
-	            this.pluginProviders.put(thalesCipherTrustCypherProvider.getCode(), thalesCipherTrustCypherProvider)
-                /*     
- 
-
-                ThalesCipherTrustCredentialProvider  thalesCipherTrustCredentialProvider new ThalesCipherTrustCredentialProvider (this,this.morpheus)
-	        this.pluginProviders.put("ciphertrust", thalesCipherTrustCredentialProvider)
-                this.pluginProviders.put("ciphertrust-cypher", new ThalesCiphertrustCypherProvider(this,this.morpheus))
-
-               this.registerProvider(new ThalesCipherTrustCypherProvider(this,morpheus))
-               this.registerProvider(new ThalesCipherTrustCredentialProvider(this,morpheus))
-               */
-
-	       //this.pluginProviders.put("ciphertrust-cypher", ThalesCipherTrustCypherProvider)
-	       //this.pluginProviders.put("ciphertrust", ThalesCipherTrustCredentialProvider)
+		ThalesCipherTrustCypherProvider     cipherTrustCypherProvider = new ThalesCipherTrustCypherProvider(this, morpheus)
+		this.pluginProviders.put("ciphertrust-cypher", cipherTrustCypherProvider)
 
 
          this.settings << new OptionType (
@@ -86,8 +62,8 @@ class ThalesCipherTrustPlugin extends Plugin {
                 code: 'ciphertrust-cypher-plugin-serviceusername',
                 fieldName: 'cipherTrustPluginServiceUsername',
                 displayOrder: 1,
-                fieldLabel: 'Thales CipherTrust API Username',
-                helpText: 'The Thales CipherTrust API Username',
+                fieldLabel: 'CipherTrust API Username',
+                helpText: 'CipherTrust API Username',
                 required: true,
                 inputType: OptionType.InputType.TEXT
         )
@@ -96,8 +72,8 @@ class ThalesCipherTrustPlugin extends Plugin {
                 code: 'ciphertrust-cypher-plugin-servicepassword',
                 fieldName: 'cipherTrustPluginServicePassword',
                 displayOrder: 2,
-                fieldLabel: 'Thales CipherTrust API Password',
-                helpText: 'The Thales CipherTrust API Password',
+                fieldLabel: 'CipherTrust API Password',
+                helpText: 'CipherTrust API Password',
                 required: true,
                 inputType: OptionType.InputType.PASSWORD
         )
@@ -106,8 +82,8 @@ class ThalesCipherTrustPlugin extends Plugin {
                 code: 'ciphertrust-cypher-plugin-serviceSlave',
                 fieldName: 'cipherTrustPluginServiceSlave',
                 displayOrder: 3,
-                fieldLabel: 'Thales CipherTrust Domain',
-                helpText: 'The Thales CipherTrust Domain',
+                fieldLabel: 'CipherTrust Domain',
+                helpText: 'CipherTrust Domain',
                 required: false,
 				defaultValue: 'root',
                 inputType: OptionType.InputType.TEXT
@@ -128,6 +104,10 @@ class ThalesCipherTrustPlugin extends Plugin {
 		def settings = getSettings(this.morpheus, this)
 		if (settings.cipherTrustPluginServiceUrl) {
 			rtn = settings.cipherTrustPluginServiceUrl
+			rtn = rtn.replace(" ", "");
+			if(!rtn.endsWith('/')) {
+				rtn = rtn + '/'
+			}
 		}
 		return rtn
 	}
@@ -137,6 +117,7 @@ class ThalesCipherTrustPlugin extends Plugin {
 		def settings = getSettings(this.morpheus, this)
 		if (settings.cipherTrustPluginServiceUsername) {
 			rtn = settings.cipherTrustPluginServiceUsername
+			rtn = rtn.replace(" ", "");
 		}
 		return rtn
 	}
@@ -150,11 +131,12 @@ class ThalesCipherTrustPlugin extends Plugin {
 		return rtn
 	}
 
-	public String getSecretPath() {
+	public String getDomain() {
 		def rtn
 		def settings = getSettings(this.morpheus, this)
-		if (settings.cipherTrustPluginSecretPath) {
-			rtn = settings.cipherTrustPluginSecretPath
+		if (settings.cipherTrustPluginServiceSlave) {
+			rtn = settings.cipherTrustPluginServiceSlave
+			rtn = rtn.replace(" ", "");
 		}
 		return rtn
 	}

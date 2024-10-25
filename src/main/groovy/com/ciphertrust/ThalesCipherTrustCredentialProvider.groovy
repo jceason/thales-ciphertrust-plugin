@@ -9,8 +9,9 @@ import com.morpheusdata.model.AccountIntegration
 import com.morpheusdata.model.Icon
 import com.morpheusdata.model.OptionType
 import com.morpheusdata.response.ServiceResponse
-import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+
 import groovy.util.logging.Slf4j
 
 @Slf4j
@@ -18,6 +19,7 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
     MorpheusContext morpheusContext
     Plugin plugin
     String credTtoken
+    long timeCredToken
 
     ThalesCipherTrustCredentialProvider(Plugin plugin, MorpheusContext morpheusContext) {
         this.morpheusContext = morpheusContext
@@ -33,13 +35,21 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
         }
         return outString
     }
+
     /**
      * Periodically called to test the status of the credential provider.
      * @param integration the referenced integration object to be loaded
      */
     @Override
     void refresh(AccountIntegration integration) {
-        //NOTHING TODO FOR NOW
+
+        def authResults = authToken(integration)
+        if(authResults.success) {
+            log.debug("Credential call to refresh success")
+        }
+        else {
+            log.error("Credential call to refresh error")
+        }
     }
 
     /**
@@ -53,45 +63,39 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
     ServiceResponse<Map> loadCredentialData(AccountIntegration integration, AccountCredential credential, Map opts) {
         HttpApiClient apiClient = new HttpApiClient()
 
-        //apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
-        String apiUrl = integration.serviceUrl ?: plugin.getUrl()
-        String servicePath = integration.servicePath ?: plugin.getServicePath()
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+        String apiUrl = getCredUrl(integration)
+        String servicePath = getCredPath(integration)
 
         try {
             def authResults = authToken(integration)
 
             if(authResults.success) {
-                String credPath= formatStringSlashEnd(servicePath) + formatApiName(credential.name)
+                String credPath= servicePath + formatApiName(credential.name)
 
                 def headers = ['accept':'application/json','Content-Type':'application/json']
                 def body = ['token': this.credTtoken, 'json': false, 'names' : [ credPath ]]
 
                 HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers, body:body])
 
-                log.info("loadCredentialData URL is  ${apiUrl}")
-                log.info("loadCredentialData Token ${this.credTtoken}")
-                log.info("loadCredentialData header is  ${headers}")
-                log.info("loadCredentialData body is  ${body}")
+                log.debug("loadCredentialData URL is  ${apiUrl}")
+                log.debug("loadCredentialData Token ${this.credTtoken}")
+                log.debug("loadCredentialData header is  ${headers}")
+                log.debug("loadCredentialData body is  ${body}")
 
 
                 def apiResults = apiClient.callApi(apiUrl,'v2/get-secret-value',null,null,restOptions,'POST')
 
                 if(apiResults.success) {
 
-                    //log.info("loadCredentialData apiResults content ${apiResults.content}")
+
                     Map content = new JsonSlurper().parseText(apiResults.content) as Map
-                    //log.info("loadCredentialData content map ${content}")
+                    //need to format to get it into a returnable map
                     String tmp = content.values() ;
                     tmp = tmp.replaceAll(/^\[\{/, "{ ");
                     tmp = tmp.replaceAll(/\}\]$/, " }");
-                    //log.info("loadCredentialData tmp ${tmp}")
 
                     def data = new JsonSlurper().parseText(tmp);
-
-                    log.info("loadCredentialData data map ${data}");
-                    log.info("loadCredentialData data keys ${data.keySet()}");
-                    //log.info("loadCredentialData data values ${data.values()}");
-                    //def data = [username:"jeff",password:"123"]
 
                     ServiceResponse<Map> response = new ServiceResponse<>(true,null,null,data as Map)
                     return response
@@ -107,45 +111,49 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
         }
     }
 
-    protected ServiceResponse<String> authToken( AccountIntegration integration) {
-        HttpApiClient client = new HttpApiClient()
+    protected ServiceResponse<Map> authToken( AccountIntegration integration) {
 
-        String apiUrl = integration.serviceUrl ?: plugin.getUrl()
-        String serviceUsername = integration.serviceUsername ?: plugin.getServiceUsername()
-        String servicePassword = integration.servicePassword ?: plugin.getServicePassword()
-        String servicePath = integration.servicePath ?: plugin.getServicePath()
+        long currentTime = System.currentTimeMillis() / 1000
 
-        log.info("URL is  ${apiUrl}")
-        log.info("Access Id is  ${serviceUsername}")
-        log.info("Secret Path is  ${servicePath}")
+        //give a cushion of 10 seconds
+        if(this.timeCredToken > (currentTime + 10)) {
+            return  ServiceResponse.success("Credentials auth token still valid")
+        }
+
+        HttpApiClient apiClient = new HttpApiClient()
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+
+        String apiUrl = getCredUrl(integration)
+        String accessId = integration.serviceUsername
+        String accessKey = integration.servicePassword
 
         def headers = ['Content-Type':'application/json']
-        def body = ['access-type':'access_key','access-id':serviceUsername,'access-key':servicePassword]
+        def body = ['debug': true , 'access-type':'access_key','access-id':accessId,'access-key':accessKey]
 
         HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers, body:body])
-        log.info("header is  ${headers}")
-        log.info("body is  ${body}")
+        log.debug("Cred authToken header is  ${headers}")
+        log.debug("Cred authToken body is  ${body}")
 
         try {
-         log.info("Calling endpoint  ${apiUrl}v2/auth")
-         def apiResults = client.callApi(apiUrl,'v2/auth',null,null,restOptions,'POST')
+
+         def apiResults = apiClient.callApi(apiUrl,'v2/auth',null,null,restOptions,'POST')
            if(apiResults.success) {
               def jsonSlurper = new JsonSlurper()
               def resultContent = jsonSlurper.parseText (apiResults.content.toString())
               this.credTtoken = resultContent.token
-              log.info("Successfully retrieved a new api token ${this.credTtoken}")
-              //Map resultMap = jsonSlurper.parseText (apiResults.content.toString())
-              //String tmp = resultMap.get("token")
-              //log.info("Map Successfully retrieved a new api token ${tmp}")
-              return  ServiceResponse.success("Successfully retrieve token from authToken")
 
+              //get the token expire time and save it
+              def creds = resultContent.creds;
+              this.timeCredToken = creds.expiry?.toString()?.isLong() ? creds.expiry.toLong() : 0l
+              log.debug("Cred authToken expiry ${this.timeCredToken}")
+
+              return  ServiceResponse.success("Cred authToken successfully retrieve token from authToken")
            } else {
-              log.info("Failed to retrieve a new api token ")
+              log.debug("Cred authToken failed to retrieve a new api token ")
               return ServiceResponse.error(apiResults.error ?: apiResults.content ?: "An unknown error occurred authenticating CipherTrust")
-
            }
          }  finally {
-            client.shutdownClient()
+            apiClient.shutdownClient()
          }
     }
 
@@ -161,34 +169,32 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
 
         HttpApiClient apiClient = new HttpApiClient()
 
-        //apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
-        String apiUrl = integration.serviceUrl ?: plugin.getUrl()
-        String servicePath = integration.servicePath ?: plugin.getServicePath()
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+        String apiUrl = getCredUrl(integration)
+        String servicePath = getCredPath(integration)
 
         try {
             def authResults = authToken(integration)
-            log.info("deleteCredential returned from  authToken")
             if(authResults.success) {
-                String credPath= formatStringSlashEnd(servicePath) + formatApiName(credential.name)
+                String credPath= servicePath + formatApiName(credential.name)
 
                 def headers = ['accept':'application/json','Content-Type':'application/json']
                 def body = ['token': this.credTtoken,'format': 'text','name' :credPath]
 
                 HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers, body:body])
 
-                log.info("deleteCredential URL is  ${apiUrl}")
-                log.info("deleteCredential Token ${this.credTtoken}")
-                log.info("header is  ${headers}")
-                log.info("body is  ${body}")
+                log.debug("deleteCredential URL is  ${apiUrl}")
+                log.debug("deleteCredential header is  ${headers}")
+                log.debug("deleteCredential body is  ${body}")
 
                 def apiResults = apiClient.callApi(apiUrl,'v2/delete-item',null,null,restOptions,'POST')
 
                 if(apiResults.success) {
                       ServiceResponse<AccountCredential> response = new ServiceResponse<>(true,null,null,credential)
                       return response
-                  } else {
+                } else {
                       return ServiceResponse.error(apiResults.error,null,credential)
-                  }
+                }
               } else {
                   return ServiceResponse.error(authResults.error)
               }
@@ -210,30 +216,29 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
 
         HttpApiClient apiClient = new HttpApiClient()
 
-        //apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
-        String apiUrl = integration.serviceUrl ?: plugin.getUrl()
-        String servicePath = integration.servicePath ?: plugin.getServicePath()
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+
+        String apiUrl = getCredUrl(integration)
+        String servicePath = getCredPath(integration)
 
         try {
 
             def authResults = authToken(integration)
-            log.info("createCredential back from authToken")
+
             if(authResults.success) {
 
-
-                String credPath= formatStringSlashEnd(servicePath) + formatApiName(credential.name)
+                String credPath = servicePath + formatApiName(credential.name)
 
                 def headers = ['accept':'application/json','Content-Type':'application/json']
                 def body = ['token': this.credTtoken,'format': 'text','name' :credPath,'value' :JsonOutput.toJson(credential.data) , 'description' : credential.description ]
 
                 HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers, body:body])
 
-
-                log.info("createCredential URL is  ${apiUrl}")
-                log.info("createCredential Secret Path is  ${servicePath}")
-                log.info("createCredential Token ${this.credTtoken}")
-                log.info("createCredential header is  ${headers}")
-                log.info("createCredential body is  ${body}")
+                log.debug("createCredential URL is  ${apiUrl}")
+                log.debug("createCredential Secret Path is  ${servicePath}")
+                log.debug("createCredential Token ${this.credTtoken}")
+                log.debug("createCredential header is  ${headers}")
+                log.debug("createCredential body is  ${body}")
 
                 def apiResults = apiClient.callApi(apiUrl,'v2/create-secret',null,null,restOptions,'POST')
 
@@ -268,13 +273,14 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
 
         HttpApiClient apiClient = new HttpApiClient()
 
-        //apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
-        String apiUrl = integration.serviceUrl ?: plugin.getUrl()
-        String servicePath = integration.servicePath ?: plugin.getServicePath()
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+
+        String apiUrl = getCredUrl(integration)
+        String servicePath = getCredPath(integration)
 
         try {
             def authResults = authToken(integration)
-            log.info("updateCredential back from authToken")
+
             if(authResults.success) {
 
                 String credPath= formatStringSlashEnd(servicePath) + formatApiName(credential.name)
@@ -284,11 +290,11 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
 
                 HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers, body:body])
 
-                log.info("updateCredential URL is  ${apiUrl}")
-                log.info("updateCredential Secret Path is  ${servicePath}")
-                log.info("updateCredential Token ${this.credTtoken}")
-                log.info("updateCredential header is  ${headers}")
-                log.info("updateCredential body is  ${body}")
+                log.debug("updateCredential URL is  ${apiUrl}")
+                log.debug("updateCredential Secret Path is  ${servicePath}")
+                log.debug("updateCredential Token ${this.credTtoken}")
+                log.debug("updateCredential header is  ${headers}")
+                log.debug("updateCredential body is  ${body}")
 
                 def apiResults = apiClient.callApi(apiUrl,'v2/update-secret-val',null,null,restOptions,'POST')
 
@@ -318,51 +324,33 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
      */
     @Override
     ServiceResponse<Map> verify(AccountIntegration integration, Map opts) {
-        HttpApiClient apiClient = new HttpApiClient()
-        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+
         ServiceResponse validationResponse = ServiceResponse.create([success: true])
-        String apiUrl = integration.serviceUrl ?: plugin.getUrl()
-        log.info("URL is  ${apiUrl}")
+        String apiUrl = getCredUrl(integration)
+        String accessId = integration.serviceUsername
+        String accessKey = integration.servicePassword
+        String servicePath = getCredPath(integration)
 
         if(!apiUrl) {
             validationResponse.addError('serviceUrl', 'API URL is required in either the integration or plugin')
         }
-        String accessId = integration.serviceUsername ?: plugin.getaccessId()
-        log.info("URL is  ${accessId}")
+
         if(!accessId) {
             validationResponse.addError('serviceUsername', 'Access Id is required in either the integration or plugin')
         }
-        String accessKey = integration.servicePassword ?: plugin.getAccessKey()
         if(!accessKey) {
             validationResponse.addError('servicePassword', 'Access Key is required in either the integration or plugin')
         }
-        String secretPath = integration.secretPath ?: plugin.getSecretPath()
-        log.info("URL is  ${secretPath}")
-        if(!secretPath) {
+
+        if(!servicePath) {
             validationResponse.addError('secretPath', 'Secret Path is required in either the integration or plugin')
         }
+
         if(validationResponse.hasErrors()) {
             return validationResponse
         }
 
-        try {
-            //def authResults = authToken(apiClient,integration)
-            def authResults = authToken(integration)
-            if(authResults.success) {
-                def apiResults = apiClient.callApi(integration.serviceUrl ?: plugin.getUrl(),'/whoami',null,null,new HttpApiClient.RequestOptions(headers: ['Authorization': authResults.data]),'GET')
-                if(apiResults.success) {
-                    ServiceResponse<Map> response = new ServiceResponse<>(true,null,null,[:])
-                    return response
-                } else {
-                    return ServiceResponse.error(apiResults.error)
-                }
-            } else {
-                return ServiceResponse.error(authResults.error)
-            }
-
-        } finally {
-            apiClient.shutdownClient()
-        }
+        return authToken(integration)
 
     }
 
@@ -439,6 +427,31 @@ class ThalesCipherTrustCredentialProvider implements CredentialProvider {
             rtn = rtn.replace(' ', '-')
             rtn = rtn.replace('/', '-')
         }
-        return URLEncoder.encode(rtn)
+        return URLEncoder.encode(rtn,"UTF-8")
     }
+
+    static protected getCredUrl(AccountIntegration integration) {
+        String rtn = integration.serviceUrl
+        if(rtn) {
+            rtn = rtn.replace(' ', '')
+        }
+        if(rtn &&  !rtn.endsWith('/')) {
+            rtn = rtn + '/'
+        }
+        return rtn
+    }
+
+    static protected getCredPath(AccountIntegration integration) {
+        String rtn = integration.servicePath
+        if(rtn) {
+            rtn = rtn.replace(' ', '')
+        }
+        if(rtn &&  !rtn.endsWith('/')) {
+            rtn = rtn + '/'
+        }
+        return rtn
+    }
+
+
+
 }

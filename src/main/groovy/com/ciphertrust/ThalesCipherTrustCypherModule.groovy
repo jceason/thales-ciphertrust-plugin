@@ -1,21 +1,32 @@
 package com.ciphertrust
 
+import com.morpheusdata.core.providers.CypherModuleProvider
 import com.morpheusdata.core.MorpheusContext
+import com.morpheusdata.core.Plugin
+import com.morpheusdata.core.util.HttpApiClient
+import com.morpheusdata.model.AccountCredential
+import com.morpheusdata.model.AccountIntegration
 import com.morpheusdata.cypher.Cypher;
 import com.morpheusdata.cypher.CypherMeta;
 import com.morpheusdata.cypher.CypherModule;
 import com.morpheusdata.cypher.CypherObject
-import com.morpheusdata.core.util.HttpApiClient
+
+import com.morpheusdata.model.OptionType
 import com.morpheusdata.response.ServiceResponse
-import groovy.util.logging.Slf4j;
-import com.morpheusdata.core.Plugin;
+import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
+import groovy.util.logging.Slf4j
+
+
 
 @Slf4j
 class ThalesCipherTrustCypherModule implements CypherModule {
 
     Cypher cypher;
     Plugin plugin;
+    String jwtToken;
+    long timeJWT
+
     MorpheusContext morpheusContext
     @Override
     public void setCypher(Cypher cypher) {
@@ -32,6 +43,45 @@ class ThalesCipherTrustCypherModule implements CypherModule {
 
     @Override
     public CypherObject write(String relativeKey, String path, String value, Long leaseTimeout, String leaseObjectRef, String createdBy) {
+
+        HttpApiClient apiClient = new HttpApiClient()
+
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+        String apiUrl = plugin.getUrl();
+        String username = plugin.getServiceUsername();
+        String password = plugin.getServicePassword();
+        String domain = plugin.getDomain();
+
+        try {
+            def authResults = authToken(apiUrl,username,password,domain)
+            log.info("write cypher back from authToken")
+            if(authResults.success) {
+
+                //HttpApiClient apiClient = new HttpApiClient()
+                apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()\
+/*
+                def headers = ['Accept': 'application/json' , 'Content-Type':'application/json']
+                def body = ['grant_type':'password' , 'domain':domain , 'username':username , 'password':password ]
+
+                HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers , body:body])
+                log.info("header is  ${headers}")
+                log.info("body is  ${body}")
+
+                log.info("Calling endpoint  ${apiUrl}v1/vault/keys2")
+                def apiResults = apiClient.callApi(apiUrl,'v1/vault/keys2',null,null,restOptions,'POST')
+*/
+
+            } else {
+                return ServiceResponse.error(authResults.error)
+            }
+        } catch (Exception exception) {
+            log.error("write cypher unable to create cypher", exception)
+            return null
+        }
+        finally {
+            apiClient.shutdownClient()
+        }
+
 /*
         if(value != null && value.length() > 0) {
             String key = relativeKey;
@@ -138,23 +188,51 @@ class ThalesCipherTrustCypherModule implements CypherModule {
               }
             }
             return true;
-        }
+
+   */
     }
 
-    protected getAuthToken(String conjurUrl, String conjurOrg, String conjurUsername, String conjurApiKey) {
-        HttpApiClient apiClient = new HttpApiClient()
-        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
-        def requestOpts = new HttpApiClient.RequestOptions(headers: ['Accept-Encoding':'base64'], body: conjurApiKey)
-        //Conjur usernames frequently require URL encoded / in the path. For example host%2Fapp
-        //HttpApiClient uses apache URLBuilder which will double encode unless we are careful.
-        def url = "${conjurUrl}/authn/${URLEncoder.encode(conjurOrg, 'UTF-8')}/${URLEncoder.encode(conjurUsername, 'UTF-8')}/authenticate"
-        ServiceResponse resp = apiClient.callApi(url,null,null,null,requestOpts,"POST");
-        if(resp.getSuccess()) {
-            return "Token token=\"${resp.getContent()}\""
-        } else {
-            return null;//throw exception?
+
+    protected ServiceResponse<Map> authToken(String apiUrl, String username, String password, String domain) {
+        long currentTime = System.currentTimeMillis() / 1000
+
+        //give a cushion of 10 seconds
+        if(this.timeJWT > (currentTime + 10)) {
+            return  ServiceResponse.success("Credentials auth token still valid")
         }
-*/
+
+        HttpApiClient apiClient = new HttpApiClient()
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()\
+
+        def headers = ['Accept': 'application/json' , 'Content-Type':'application/json']
+        def body = ['grant_type':'password' , 'domain':domain , 'username':username , 'password':password ]
+
+        HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers , body:body])
+        log.info("header is  ${headers}")
+        log.info("body is  ${body}")
+
+        try {
+            log.info("Calling endpoint  ${apiUrl}v1/auth/tokens")
+            def apiResults = apiClient.callApi(apiUrl,'v1/auth/tokens',null,null,restOptions,'POST')
+            log.info("apiresults is  ${apiResults}")
+
+            if(apiResults.success) {
+                def jsonSlurper = new JsonSlurper()
+                def resultContent = jsonSlurper.parseText (apiResults.content.toString())
+                log.info("Successfully retrieved a new jwt  ${resultContent.jwt}")
+                this.jwtToken = resultContent.jwt
+                //default expire in 300 seconds
+                this.timeJWT = (System.currentTimeMillis() / 1000) + 300
+
+                return  ServiceResponse.success("Successfully retrieve jwt from authToken")
+
+            } else {
+                log.info("Failed to retrieve a new jwt token ")
+                return ServiceResponse.error(apiResults.error ?: apiResults.content ?: "An unknown error occurred authenticating CipherTrust")
+            }
+        }  finally {
+            apiClient.shutdownClient()
+        }
 
     }
 
@@ -163,7 +241,7 @@ class ThalesCipherTrustCypherModule implements CypherModule {
     public String getUsage() {
         StringBuilder usage = new StringBuilder();
 
-        usage.append("This allows secret data to be fetched from a Thales Ciphertrust integration. This can be configured in the plugin integration settings.");
+        usage.append("This allows cyphers to be fetched from a Thales CipherTrust integration. This can be configured in the plugin integration settings.");
 
         return usage.toString();
     }
