@@ -42,7 +42,7 @@ class ThalesCipherTrustCypherModule implements CypherModule {
     }
 
     @Override
-    public CypherObject write(String relativeKey, String path, String value, Long leaseTimeout, String leaseObjectRef, String createdBy) {
+    public CypherObject write(String key, String path, String value, Long leaseTimeout, String leaseObjectRef, String createdBy) {
 
         HttpApiClient apiClient = new HttpApiClient()
 
@@ -54,144 +54,154 @@ class ThalesCipherTrustCypherModule implements CypherModule {
 
         try {
             def authResults = authToken(apiUrl,username,password,domain)
-            log.info("write cypher back from authToken")
-            if(authResults.success) {
 
-                //HttpApiClient apiClient = new HttpApiClient()
-                apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()\
-/*
-                def headers = ['Accept': 'application/json' , 'Content-Type':'application/json']
-                def body = ['grant_type':'password' , 'domain':domain , 'username':username , 'password':password ]
+            if(authResults.success) {
+                String bearerString =    'Bearer ' + jwtToken
+                def headers = ['Accept': 'application/json', 'Content-Type': 'application/json' , 'Authorization': bearerString ]
+
+                def body = ['name':key , 'algorithm':'aes'  ]
 
                 HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers , body:body])
                 log.info("header is  ${headers}")
                 log.info("body is  ${body}")
 
                 log.info("Calling endpoint  ${apiUrl}v1/vault/keys2")
+
                 def apiResults = apiClient.callApi(apiUrl,'v1/vault/keys2',null,null,restOptions,'POST')
-*/
+                if(apiResults.getSuccess()) {
+                    log.info("Successfully created key ${key} " )
+
+                    /*CypherObject keyResults = this.read( key,  path,  leaseTimeout,  leaseObjectRef,  createdBy)
+                    log.info("Successfully created key  ${keyResults.key}")
+                    log.info("Successfully created key value ${keyResults.value}")
+                    log.info("Successfully created key leaseTimeout ${keyResults.leaseTimeout}")
+                    log.info("Successfully created key leaseObjectRef ${keyResults.leaseObjectRef}")
+                    log.info("Successfully created key createdBy ${keyResults.createdBy}")
+                    */
+
+                    CypherObject rtn = new CypherObject(key,value,leaseTimeout,leaseObjectRef, createdBy);
+                    rtn.shouldPersist = false;
+                    return rtn
+                } else {
+                    log.error("Cypher failed to write key ")
+                    return null
+                }
 
             } else {
-                return ServiceResponse.error(authResults.error)
+                log.error("Cypher failed to write key ")
+                return null
             }
         } catch (Exception exception) {
-            log.error("write cypher unable to create cypher", exception)
+            log.error("Cypher failed to write key", exception)
             return null
         }
         finally {
             apiClient.shutdownClient()
         }
 
-/*
-        if(value != null && value.length() > 0) {
-            String key = relativeKey;
-            if(path != null) {
-                key = path + "/" + key;
-            }
-            if(relativeKey.startsWith("config/")) {
-                System.out.println("Writing to : " + key);
-                return new CypherObject(key,value,0l, leaseObjectRef, createdBy);
-            } else {
-                String conjurUrl = plugin.getUrl();
-                String conjurUsername = plugin.getUsername();
-                String conjurApiKey = plugin.getApiKey();
-                String conjurOrg = plugin.getOrganization();
-                String conjurToken = getAuthToken(conjurUrl,conjurOrg,conjurUsername,conjurApiKey)
-                //we gotta fetch from conjur
-                String conjurPath="/secrets/${conjurOrg}/variable/" + relativeKey
-
-                HttpApiClient apiClient = new HttpApiClient()
-                apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
-                def requestOpts = new HttpApiClient.RequestOptions(headers: ['Authorization': conjurToken], body: value)
-
-                try {
-                    ServiceResponse resp = apiClient.callApi(conjurUrl,conjurPath,null,null,requestOpts,"POST");
-                    if(resp.getSuccess()) {
-                        return new CypherObject(key,value,leaseTimeout, leaseObjectRef, createdBy);
-                    } else {
-                        return null;
-                    }
-                } catch(Exception ex) {
-                    return null;
-                }
-            }
-
-        } else {
-            return null; //we dont write no value to a key
-        }
-*/
     }
 
-    @Override
-    public CypherObject read(String relativeKey, String path, Long leaseTimeout, String leaseObjectRef, String createdBy) {
-/*
-        String key = relativeKey;
-        if(path != null) {
-            key = path + "/" + key;
-        }
-        if(relativeKey.startsWith("config/")) {
-            return null;
-        } else {
-            String conjurUrl = plugin.getUrl();
-            String conjurUsername = plugin.getUsername();
-            String conjurApiKey = plugin.getApiKey();
-            String conjurOrg = plugin.getOrganization();
-            String conjurToken = getAuthToken(conjurUrl,conjurOrg,conjurUsername,conjurApiKey)
-            //we gotta fetch from conjur
-            String conjurPath="/secrets/${conjurOrg}/variable/" + relativeKey
-            HttpApiClient apiClient = new HttpApiClient()
-            apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
-            def requestOpts = new HttpApiClient.RequestOptions(headers: ['Authorization': conjurToken])
-            try {
-                ServiceResponse resp = apiClient.callApi(conjurUrl,conjurPath,null,null,requestOpts,"GET");
-                if(resp.getSuccess()) {
-                    ObjectMapper mapper = new ObjectMapper();
 
-                    CypherObject conjurResult = new CypherObject(key,resp.getContent(),leaseTimeout,leaseObjectRef, createdBy);
-                    conjurResult.shouldPersist = false;
-                    return conjurResult;
+
+    @Override
+    public CypherObject read(String key, String path, Long leaseTimeout, String leaseObjectRef, String createdBy) {
+
+        HttpApiClient apiClient = new HttpApiClient()
+
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+        String apiUrl = plugin.getUrl();
+        String username = plugin.getServiceUsername();
+        String password = plugin.getServicePassword();
+        String domain = plugin.getDomain();
+
+        try {
+            def authResults = authToken(apiUrl, username, password, domain)
+
+            if (authResults.success) {
+                String bearerString =    'Bearer ' + jwtToken
+                def headers = ['Accept': 'application/json', 'Content-Type': 'application/json' , 'Authorization': bearerString ]
+                //def body = ['type': 'name']
+
+                HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers: headers])
+                log.info("header is  ${headers}")
+                //log.info("body is  ${body}")
+                log.info("key is ${key}")
+                log.info("path is  ${path}")
+                String endPoint = 'v1/vault/keys2/' + key + '/export'
+                log.info("endPoint is ${endPoint}")
+
+                def apiResults = apiClient.callApi(apiUrl,endPoint,null,null,restOptions,'POST')
+
+                if(apiResults.getSuccess()) {
+                    def jsonSlurper = new JsonSlurper()
+                    def resultContent = jsonSlurper.parseText (apiResults.content.toString())
+
+                    log.info("Successfully retrieved key ${key}")
+                    log.info("Successfully retrieved key material ${resultContent.material}")
+
+                    CypherObject keyResults = new CypherObject(key,resultContent.material,leaseTimeout,leaseObjectRef, createdBy);
+                    keyResults.shouldPersist = false;
+                    return keyResults;
                 } else {
-                    log.error("Error Fetching cypher key: ${resp}")
-                    return null;//throw exception?
+                    log.info("Cypher failed to read key ")
+                    return null
                 }
-            } catch(Exception ex) {
-                log.error("Error Occurred reading conjur key {}",ex.message,ex)
-                return null;
+            } else {
+                log.error("Cypher failed to read key ")
+                return null
             }
-
+        } catch (Exception exception) {
+            log.error("Cypher failed to read key ", exception)
+            return null
         }
-*/
+        finally {
+            apiClient.shutdownClient()
+        }
     }
+
 
     @Override
-    public boolean delete(String relativeKey, String path, CypherObject object) {
-/*
-        if(relativeKey.startsWith("config/")) {
-            return true;
-        } else {
-            String conjurUrl = plugin.getUrl();
-            String conjurUsername = plugin.getUsername();
-            String conjurApiKey = plugin.getApiKey();
-            String conjurOrg = plugin.getOrganization();
-            boolean clearSecretOnDeletion = plugin.getClearSecretOnDeletion();
-            if(clearSecretOnDeletion) {
-              String conjurToken = getAuthToken(conjurUrl,conjurOrg,conjurUsername,conjurApiKey)
-              //we gotta fetch from conjur
-              String conjurPath="/secrets/${conjurOrg}/variable/" + relativeKey
-              HttpApiClient apiClient = new HttpApiClient()
-              apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
-              def requestOpts = new HttpApiClient.RequestOptions(headers: ['Authorization': conjurToken], body: JsonOutput.toJson(""))
-              try {
-                  apiClient.callApi(conjurUrl,conjurPath,null,null,requestOpts,"POST");
-              } catch(Exception ex) {
+    public boolean delete(String key, String path, CypherObject object) {
+        HttpApiClient apiClient = new HttpApiClient()
 
-              }
+        apiClient.networkProxy = morpheusContext.services.setting.getGlobalNetworkProxy()
+        String apiUrl = plugin.getUrl();
+        String username = plugin.getServiceUsername();
+        String password = plugin.getServicePassword();
+        String domain = plugin.getDomain();
+
+        try {
+            def authResults = authToken(apiUrl, username, password, domain)
+            log.info("delete cypher back from authToken")
+            if (authResults.success) {
+                String bearerString = 'Bearer ' + jwtToken
+
+                def headers = ['Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': bearerString]
+
+                HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers: headers])
+                String endPoint = 'v1/vault/keys2/' + key
+                log.info("Calling delete endpoint ${endPoint}")
+
+                def apiResults = apiClient.callApi(apiUrl, endPoint, null, null, restOptions, 'DELETE')
+                if (apiResults.getSuccess()) {
+                    log.info("Successfully deleted key ${key} ")
+                    return true
+                } else {
+                    log.error("Cypher failed to delete key ")
+                    return false
+                }
+            } else {
+                log.info("Cypher failed to delete key  ")
+                return false
             }
-            return true;
-
-   */
+        } catch (Exception exception) {
+            log.error("Cypher failed to delete key", exception)
+            return false
+        }
+        finally {
+            apiClient.shutdownClient()
+        }
     }
-
 
     protected ServiceResponse<Map> authToken(String apiUrl, String username, String password, String domain) {
         long currentTime = System.currentTimeMillis() / 1000
@@ -224,13 +234,17 @@ class ThalesCipherTrustCypherModule implements CypherModule {
                 //default expire in 300 seconds
                 this.timeJWT = (System.currentTimeMillis() / 1000) + 300
 
-                return  ServiceResponse.success("Successfully retrieve jwt from authToken")
+                return  ServiceResponse.success("Successfully retrieve cypher token from authToken")
 
             } else {
-                log.info("Failed to retrieve a new jwt token ")
+                log.error("Failed to retrieve a new cypher token ")
                 return ServiceResponse.error(apiResults.error ?: apiResults.content ?: "An unknown error occurred authenticating CipherTrust")
             }
-        }  finally {
+        } catch (Exception exception) {
+            log.error("authToken cypher ", exception)
+            return ServiceResponse.error("An unknown error occurred authenticating CipherTrust")
+        }
+        finally {
             apiClient.shutdownClient()
         }
 
@@ -251,10 +265,7 @@ class ThalesCipherTrustCypherModule implements CypherModule {
         return null;
     }
 
-    /**
-     * The readFromDatastore method is used to determine if Cypher should read from the value stored within the {@link Datastore} on read requests
-     * @return if this returns false then Cypher read requests are always executed through the module and do not read from a value that exists within the {@link Datastore}.
-     */
+
     @Override
     Boolean readFromDatastore() {
         return false //important to ensure reads are always obtained from ciphertrust
