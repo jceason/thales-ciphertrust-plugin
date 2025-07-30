@@ -15,6 +15,6 @@ A jar will be produced in the `build/lib` folder that can be uploaded into a Mor
 
 ### Configuring
 
-Once the plugin is loaded in the environment. Conjur Becomes available in `Infrastructure -> Trust -> Services`.
+Once the plugin is loaded in the environment. CipherTrust Becomes available in `Infrastructure -> Trust -> Services`.
 
 When adding the integration simply enter the URL of the CipherTrust Server
