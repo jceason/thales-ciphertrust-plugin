@@ -1,4 +1,4 @@
-package com.ciphertrust
+package com.thalesgroup.ciphertrust
 
 import com.morpheusdata.core.providers.CypherModuleProvider
 import com.morpheusdata.core.MorpheusContext

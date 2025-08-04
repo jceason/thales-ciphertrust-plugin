@@ -20,7 +20,7 @@ apply plugin: 'asset-pipeline'
 apply plugin: 'com.morpheusdata.morpheus-plugin-gradle'
 
 
-group = 'com.ciphertrust'
+group = 'com.thalesgroup.ciphertrust'
 ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
 
 java {
@@ -75,7 +75,7 @@ sourceSets {
 jar {
 	manifest {
 		attributes(
-				'Plugin-Class': 'com.ciphertrust.ThalesCipherTrustPlugin',
+				'Plugin-Class': 'com.thalesgroup.ciphertrust.ThalesCipherTrustPlugin',
 				'Plugin-Version': version,
 				'Morpheus-Name': 'Thales CipherTrust',
 				'Morpheus-Organization': 'morpheus',

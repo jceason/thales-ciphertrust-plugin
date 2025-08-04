@@ -1,4 +1,4 @@
-package com.ciphertrust
+package com.thalesgroup.ciphertrust
 
 import com.morpheusdata.core.providers.CypherModuleProvider
 import com.morpheusdata.core.MorpheusContext
@@ -54,33 +54,54 @@ class ThalesCipherTrustCypherModule implements CypherModule {
 
         try {
             def authResults = authToken(apiUrl,username,password,domain)
-
+            def body = ['']
             if(authResults.success) {
                 String bearerString =    'Bearer ' + jwtToken
+                String endpoint = 'v1/vault/keys2'
+
+                if (key.startsWith "rotate/") {
+                    log.debug("key rotation requested ${key}")
+                    def parts  = key.split("/")
+                    key = parts[1]
+                    body = ['description':key]
+                    endpoint = 'v1/vault/keys2/' + key + '/versions'
+                } else {
+                    def parts  = key.split("/")
+                    // Possible algorithms
+                    // aes tdes rsa ec hmac-sha1 hmac-sha256 hmac-sha384 hmac-sha512 seed aria opaque
+                    String alg = parts[0]
+                    key = parts[1]
+                    body = ['name':key , 'algorithm':alg ]
+                }
                 def headers = ['Accept': 'application/json', 'Content-Type': 'application/json' , 'Authorization': bearerString ]
 
-                def body = ['name':key , 'algorithm':'aes'  ]
 
                 HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers , body:body])
-                log.info("header is  ${headers}")
+                /*log.info("header is  ${headers}")
                 log.info("body is  ${body}")
+                log.info("key parm is  ${key}")
+                log.info("path parm is  ${path}")
+                log.info("Calling endpoint  ${endpoint}")
 
-                log.info("Calling endpoint  ${apiUrl}v1/vault/keys2")
+                 */
 
-                def apiResults = apiClient.callApi(apiUrl,'v1/vault/keys2',null,null,restOptions,'POST')
+                def apiResults = apiClient.callApi(apiUrl,endpoint,null,null,restOptions,'POST')
                 if(apiResults.getSuccess()) {
-                    log.info("Successfully created key ${key} " )
 
-                    /*CypherObject keyResults = this.read( key,  path,  leaseTimeout,  leaseObjectRef,  createdBy)
+                    /*
+                    log.info("Successfully created key ${key} " )
+                    CypherObject keyResults = this.read( key,  path,  leaseTimeout,  leaseObjectRef,  createdBy)
+
                     log.info("Successfully created key  ${keyResults.key}")
                     log.info("Successfully created key value ${keyResults.value}")
+
                     log.info("Successfully created key leaseTimeout ${keyResults.leaseTimeout}")
-                    log.info("Successfully created key leaseObjectRef ${keyResults.leaseObjectRef}")
+                    log.info("Successfully created key leaseObjectRef :w${keyResults.leaseObjectRef}")
                     log.info("Successfully created key createdBy ${keyResults.createdBy}")
                     */
 
                     CypherObject rtn = new CypherObject(key,value,leaseTimeout,leaseObjectRef, createdBy);
-                    rtn.shouldPersist = false;
+                    //rtn.shouldPersist = false;
                     return rtn
                 } else {
                     log.error("Cypher failed to write key ")
@@ -123,12 +144,13 @@ class ThalesCipherTrustCypherModule implements CypherModule {
                 //def body = ['type': 'name']
 
                 HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers: headers])
-                log.info("header is  ${headers}")
-                //log.info("body is  ${body}")
+                /*log.info("header is  ${headers}")
+                log.info("body is  ${body}")
                 log.info("key is ${key}")
                 log.info("path is  ${path}")
+                 */
                 String endPoint = 'v1/vault/keys2/' + key + '/export'
-                log.info("endPoint is ${endPoint}")
+                //log.info("endPoint is ${endPoint}")
 
                 def apiResults = apiClient.callApi(apiUrl,endPoint,null,null,restOptions,'POST')
 
@@ -136,14 +158,14 @@ class ThalesCipherTrustCypherModule implements CypherModule {
                     def jsonSlurper = new JsonSlurper()
                     def resultContent = jsonSlurper.parseText (apiResults.content.toString())
 
-                    log.info("Successfully retrieved key ${key}")
-                    log.info("Successfully retrieved key material ${resultContent.material}")
+                    log.debug("Successfully retrieved key ${key}")
+                    //log.info("Successfully retrieved key material ${resultContent.material}")
 
                     CypherObject keyResults = new CypherObject(key,resultContent.material,leaseTimeout,leaseObjectRef, createdBy);
                     keyResults.shouldPersist = false;
                     return keyResults;
                 } else {
-                    log.info("Cypher failed to read key ")
+                    log.debug("Cypher failed to read key ")
                     return null
                 }
             } else {
@@ -255,7 +277,7 @@ class ThalesCipherTrustCypherModule implements CypherModule {
     public String getUsage() {
         StringBuilder usage = new StringBuilder();
 
-        usage.append("This allows cyphers to be fetched from a Thales CipherTrust integration. This can be configured in the plugin integration settings.");
+        usage.append("This allows cyphers to use Thales CipherTrust Manager. This can be configured in the plugin integration settings.");
 
         return usage.toString();
     }
