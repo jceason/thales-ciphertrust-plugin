@@ -194,7 +194,7 @@ class ThalesCipherTrustCypherModule implements CypherModule {
 
         try {
             def authResults = authToken(apiUrl, username, password, domain)
-            log.info("delete cypher back from authToken")
+
             if (authResults.success) {
                 String bearerString = 'Bearer ' + jwtToken
 
@@ -202,18 +202,17 @@ class ThalesCipherTrustCypherModule implements CypherModule {
 
                 HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers: headers])
                 String endPoint = 'v1/vault/keys2/' + key
-                log.info("Calling delete endpoint ${endPoint}")
 
                 def apiResults = apiClient.callApi(apiUrl, endPoint, null, null, restOptions, 'DELETE')
                 if (apiResults.getSuccess()) {
-                    log.info("Successfully deleted key ${key} ")
+                    log.debug("Successfully deleted key ${key} ")
                     return true
                 } else {
                     log.error("Cypher failed to delete key ")
                     return false
                 }
             } else {
-                log.info("Cypher failed to delete key  ")
+                log.error("Cypher failed to delete key  ")
                 return false
             }
         } catch (Exception exception) {
@@ -240,18 +239,15 @@ class ThalesCipherTrustCypherModule implements CypherModule {
         def body = ['grant_type':'password' , 'domain':domain , 'username':username , 'password':password ]
 
         HttpApiClient.RequestOptions restOptions = new HttpApiClient.RequestOptions([headers:headers , body:body])
-        log.info("header is  ${headers}")
-        log.info("body is  ${body}")
+
 
         try {
-            log.info("Calling endpoint  ${apiUrl}v1/auth/tokens")
             def apiResults = apiClient.callApi(apiUrl,'v1/auth/tokens',null,null,restOptions,'POST')
-            log.info("apiresults is  ${apiResults}")
 
             if(apiResults.success) {
                 def jsonSlurper = new JsonSlurper()
                 def resultContent = jsonSlurper.parseText (apiResults.content.toString())
-                log.info("Successfully retrieved a new jwt  ${resultContent.jwt}")
+
                 this.jwtToken = resultContent.jwt
                 //default expire in 300 seconds
                 this.timeJWT = (System.currentTimeMillis() / 1000) + 300
